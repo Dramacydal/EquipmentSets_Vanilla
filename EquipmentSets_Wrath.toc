@@ -1,9 +1,0 @@
-## Interface: 30403
-## Title : EquipmentSets
-## Version : 1.4.5b-WOTLKC
-## Notes: Allows you to save your own gear presets and switch between them. -- You can also use "/unequipall" to remove all your gear at once.
-## SavedVariablesPerCharacter: savedSet1 savedSet2 savedSet3 savedSet4 savedSet5 savedSet6 savedSet7 savedSet8 savedSet9 savedSet10 loadSlotTitles savedAmmoSlotItem
-## DefaultState : enabled
-## Author: Fr0stwing
-
-EquipmentSets_Wrath.lua

@@ -1,4 +1,4 @@
-## Interface: 11501
+## Interface: 11505
 ## Title : EquipmentSets
 ## Version : 1.4.8b-VanillaEra
 ## Notes: Allows you to save your own gear presets and switch between them. -- You can also use "/unequipall" to remove all your gear at once.

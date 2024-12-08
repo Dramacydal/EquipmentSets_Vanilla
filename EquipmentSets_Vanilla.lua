@@ -94,7 +94,7 @@ function EquipmentSets:UneqipSlot(slot, bagId)
         return false
     end
 
-    self:Log("Unequipping " .. name)
+    -- self:Log("Unequipping " .. name)
 
     if bagId ~= nil then
         PickupInventoryItem(slot - 1)
@@ -343,7 +343,6 @@ function EquipmentSets:LoadSet(setId)
                 end
 
                 for _, data in pairs(result) do
-                    print(dump(data))
                     local bagId, bagSlot = data[1], data[2]
 
                     if (not usedSlots[bagId] or usedSlots[bagId] and not usedSlots[bagId][bagSlot]) then
@@ -425,6 +424,7 @@ function EquipmentSets:Initialize1()
         for xx = 1, MAX_SET_COUNT do
             local info = UIDropDownMenu_CreateInfo()
             info.func = function(self, arg)
+                EquipmentSets:Log("Loading set #" .. arg .. " [" .. EquipmentSets:GetName(arg) .. "]")
                 EquipmentSets:LoadSet(arg)
                 CloseDropDownMenus()
             end
@@ -621,7 +621,6 @@ function EquipmentSets:Initialize1()
                         CloseDropDownMenus()
                     end
                     local sName = C_Item.GetItemInfo(itemID);
-                    --print(("Found! [ID: %s] [Name: " .. sName .. "] [Stack count: ".. GetItemCount(itemID) .."] [bag ID: %s] [slot ID: %s]"):format(itemID, bag, slot))
                     info.text, info.arg1, info.checked = sName, sName, sName == savedAmmoSlotItem
                     info.tooltipOnButton = true
                     info.tooltipTitle = sName

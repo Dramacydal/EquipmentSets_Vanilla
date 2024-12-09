@@ -13,6 +13,23 @@ local frame = CreateFrame("FRAME");
 local MAX_SET_COUNT = 10
 local MAX_SLOT_NUMBER = 20
 
+if not table.removemulti then
+    table.removemulti = function(self, pos, cnt)
+        for i = 1, cnt do
+            table.remove(self, pos, 1)
+        end
+    end
+end
+
+function pattern_split(str, wordPattern)
+    local tbl = {}
+    for v in string.gmatch(str, wordPattern) do
+        table.insert(tbl, v)
+    end
+
+    return tbl
+end
+
 function EquipmentSets:HasSet(setId)
     return SavedSets[setId] ~= nil
 end
@@ -22,13 +39,11 @@ function EquipmentSets:RemoveSet(setId)
 end
 
 function EquipmentSets:Log(msg)
-    msg = "|cFFFF6900" .. 'EquipmentSets: ' .. "|r " .. msg
-    DEFAULT_CHAT_FRAME:AddMessage(msg);
+    DEFAULT_CHAT_FRAME:AddMessage(LIGHTYELLOW_FONT_COLOR_CODE .. '<es>: ' .. msg);
 end
 
 function EquipmentSets:LogError(msg)
-    msg = "|cFFFF6900" .. 'EquipmentSets: ' .. "|r " .. "|cFFFF0000" .. msg .. '|r'
-    DEFAULT_CHAT_FRAME:AddMessage(msg);
+    self:Log("|c" .. RED_FONT_COLOR:GenerateHexColor() .. msg)
 end
 
 function EquipmentSets:EquipItemFromSet(setId, slot, dstSlot)
@@ -59,7 +74,11 @@ function EquipmentSets:EquipItemByName(name, slot)
 
     local result = self:SearchItems(name)
     if #result > 0 then
-        self:EquipItemFromBag(result[1][1], result[1][2], slot)
+        if slot == 0 then
+            C_Item.EquipItemByName(name)
+        else
+            self:EquipItemFromBag(result[1][1], result[1][2], slot)
+        end
     end
 
     -- C_Item.EquipItemByName(name, slot)
@@ -89,6 +108,10 @@ function EquipmentSets:PutItemInBag(bagId)
 end
 
 function EquipmentSets:UneqipSlot(slot, bagId)
+    if slot == 1 then
+        return true
+    end
+
     local name = self:GetEquippedName(slot)
     if name == nil then
         return false
@@ -124,7 +147,7 @@ function EquipmentSets:UneqipSlots(slots)
 
     local spaceError = false
     for _, slot in pairs(slots) do
-        if self:GetEquippedName(slot) then
+        if slot ~= 1 and self:GetEquippedName(slot) then
             local foundSpace = false
             for bagId, num in pairs(freeSlots) do
                 if num > 0 then
@@ -161,12 +184,30 @@ function EquipmentSets:SaveItem(setId, slot, name)
     SavedSets[setId].items[slot] = name
 end
 
+function EquipmentSets:HasItem(setId, name)
+    if not self:HasSet(setId) then
+        return false
+    end
+
+    for i = 1, MAX_SLOT_NUMBER do
+        if self:GetPositionName(setId, i) == name then
+            return true
+        end
+    end
+
+    return false
+end
+
 function EquipmentSets:GetName(setId)
     if self:HasSet(setId) then
         return SavedSets[setId].name
     end
 
     return nil
+end
+
+function EquipmentSets:DefaultName(setId)
+    return "Loadout " .. setId
 end
 
 function EquipmentSets:SetName(setId, name)
@@ -182,7 +223,7 @@ function EquipmentSets:IsSetEquipped(setId)
         return false
     end
 
-    for i = 2, MAX_SLOT_NUMBER do
+    for i = 1, MAX_SLOT_NUMBER do
         if self:GetPositionName(setId, i) ~= self:GetEquippedName(i) then
             return false
         end
@@ -193,12 +234,19 @@ end
 
 function EquipmentSets:GetEquippedName(slotId)
     local equipmentSlotId = GetInventorySlotInfo(self.SlotCodes[slotId])
-    local itemLink = GetInventoryItemLink("player", equipmentSlotId)
-    if itemLink == nil then
-        return nil
+    if equipmentSlotId == 0 then
+        local itemId = GetInventoryItemID("player", equipmentSlotId)
+        if itemId then
+            return C_Item.GetItemInfo(itemId)
+        end
+    else
+        local itemLink = GetInventoryItemLink("player", equipmentSlotId)
+        if itemLink then
+            return C_Item.GetItemInfo(itemLink)
+        end
     end
 
-    return C_Item.GetItemInfo(itemLink)
+    return nil
 end
 
 function EquipmentSets:SearchItems(name)
@@ -243,7 +291,7 @@ function EquipmentSets:SearchFreeSpace()
     for i = 0, NUM_BAG_SLOTS do
         if self:IsValidBag(i) then
             for j = 1, C_Container.GetContainerNumFreeSlots(i) do
-                if not C_Container.GetContainerItemLink(i,j) and not self.LockList[i][j] then
+                if not C_Container.GetContainerItemLink(i, j) and not self.LockList[i][j] then
                     self.LockList[i][j] = 1
                     return i, j
                 end
@@ -263,7 +311,7 @@ function EquipmentSets:SearchFreeBankSpace()
     for _, i in pairs(bankBags) do
         if self:IsValidBag(i) then
             for j = 1, C_Container.GetContainerNumFreeSlots(i) do
-                if not C_Container.GetContainerItemLink(i,j) and not self.LockList[i][j] then
+                if not C_Container.GetContainerItemLink(i, j) and not self.LockList[i][j] then
                     self.LockList[i][j] = 1
                     return i, j
                 end
@@ -275,9 +323,9 @@ function EquipmentSets:SearchFreeBankSpace()
 end
 
 function EquipmentSets:IsArrowsOrBullets(itemId)
-    local bagType = GetItemFamily(itemId)
+    local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemId)
 
-    return bagType == 1 or bagType == 2
+    return classID == 6 and (subClassID == 2 or subClassID == 3)
 end
 
 -- SavedVariables
@@ -313,13 +361,17 @@ end
 function EquipmentSets:SaveCurrentSet(currentSetNumber)
     local currentName = self:GetName(currentSetNumber)
     if (currentName == nil or currentName == "") then
-        currentName = "Loadout " .. currentSetNumber
+        currentName = self:DefaultName(currentSetNumber)
     end
 
     self:ResetSet(currentSetNumber, currentName)
     self:SaveItem(currentSetNumber, 1, savedAmmoSlotItem)
     for x = 2, MAX_SLOT_NUMBER do
-        self:SaveItem(currentSetNumber, x, self:GetEquippedName(x))
+        local name = self:GetEquippedName(x)
+        if x == 1 then
+            name = savedAmmoSlotItem
+        end
+        self:SaveItem(currentSetNumber, x, name)
     end
 end
 
@@ -336,18 +388,25 @@ function EquipmentSets:LoadSet(setId)
         if name == nil then
             table.insert(toUnequip, x)
         else
+            -- self:Log("Equipped at " .. x .. ': ' .. tostring(self:GetEquippedName(x)))
             if self:GetEquippedName(x) ~= name then
                 local result = self:SearchItems(name)
                 if #result == 0 then
                     self:LogError("Item [" .. name .. '] not found.')
                 end
 
+                -- self:Log("Equipping " .. name .. ' to ' .. x)
+
                 for _, data in pairs(result) do
                     local bagId, bagSlot = data[1], data[2]
 
                     if (not usedSlots[bagId] or usedSlots[bagId] and not usedSlots[bagId][bagSlot]) then
                         -- self:Log("Equipping " .. name .. ' from ' .. bagId .. ' ' .. bagSlot .. ' to ' .. (x - 1))
-                        self:EquipItemFromBag(bagId, bagSlot, x - 1)
+                        if x - 1 == 0 then
+                            C_Item.EquipItemByName(name)
+                        else
+                            self:EquipItemFromBag(bagId, bagSlot, x - 1)
+                        end
                         if not usedSlots[bagId] then
                             usedSlots[bagId] = {}
                         end
@@ -371,19 +430,141 @@ for i = 1, MAX_SET_COUNT do
     end
 end
 
-SLASH_LOADSET1 = "/loadset"
-SlashCmdList["LOADSET"] = function(msg)
-    local setId = tonumber(msg)
-    if setId == nil then
-        EquipmentSets:Log("Set id must be a number")
-        return
+SLASH_EQ1 = "/equipmentsets"
+SLASH_EQ2 = "/es"
+SlashCmdList["EQ"] = function(msg)
+    local args = pattern_split(msg, "[^ ]+")
+    if args[1] == 'load' then
+        local setId = tonumber(args[2])
+        if setId == nil then
+            EquipmentSets:LogError("Set id must be a number")
+            return
+        end
+        if not EquipmentSets:HasSet(setId) then
+            EquipmentSets:LogError("Set id " .. setId .. " is not stored")
+            return
+        end
+        EquipmentSets:Log("Loading set #" .. setId .. " \"" .. EquipmentSets:GetName(setId) .. "\"")
+        EquipmentSets:LoadSet(setId)
+    elseif args[1] == 'save' then
+        local setId = tonumber(args[2])
+        if setId == nil then
+            EquipmentSets:LogError("Set id must be a number")
+            return
+        end
+        if setId < 1 or setId > MAX_SET_COUNT then
+            EquipmentSets:LogError("Bad set number")
+            return
+        end
+
+        local name = args[3] or ""
+        EquipmentSets:Log("Saving current equpment to set #" ..
+            setId ..
+            " \"" .. (#name > 0 and name or EquipmentSets:GetName(setId) or EquipmentSets:DefaultName(setId)) .. "\"")
+        EquipmentSets:SaveCurrentSet(setId)
+        if #name > 0 then
+            EquipmentSets:SetName(setId, name)
+        end
+    elseif args[1] == 'uneqiup' then
+        EquipmentSets:Log("Unequipping all items")
+        EquipmentSets:UnequipEverything()
+    elseif args[1] == 'rename' then
+        local setId = tonumber(args[2])
+        if setId == nil then
+            EquipmentSets:LogError("Set id must be a number")
+            return
+        end
+        if not EquipmentSets:HasSet(setId) then
+            EquipmentSets:LogError("Set id " .. setId .. " is not stored")
+            return
+        end
+        local name = args[3]
+        if not name or #name == 0 then
+            EquipmentSets:LogError("Name not provided")
+            return
+        end
+
+        EquipmentSets:Log("Renaming equpment set #" .. setId .. " to \"" .. name .. "\"")
+        EquipmentSets:SetName(setId, name)
+    elseif args[1] == 'remove' then
+        local setId = tonumber(args[2])
+        if setId == nil then
+            EquipmentSets:LogError("Set id must be a number")
+            return
+        end
+        if not EquipmentSets:HasSet(setId) then
+            EquipmentSets:LogError("Set id " .. setId .. " is not stored")
+            return
+        end
+
+        EquipmentSets:Log("Removing equipment set #" .. setId .. " \"" .. EquipmentSets:GetName(setId) .. "\"")
+        EquipmentSets:RemoveSet(setId)
+    elseif args[1] == 'list' then
+        local cnt = 0
+        for i = 1, MAX_SET_COUNT do
+            if EquipmentSets:HasSet(i) then
+                cnt = cnt + 1
+                local totalItems = 0
+                local hasItems = 0
+                local equippedItems = 0
+
+                for j = 1, MAX_SLOT_NUMBER do
+                    local positionName = EquipmentSets:GetPositionName(i, j)
+                    if positionName then
+                        totalItems = totalItems + 1
+                        if EquipmentSets:GetEquippedName(j) == positionName then
+                            hasItems = hasItems + 1
+                            equippedItems = equippedItems + 1
+                        elseif #EquipmentSets:SearchItems(positionName) > 0 then
+                            hasItems = hasItems + 1
+                        end
+                    end
+                end
+
+                EquipmentSets:Log("#" ..
+                i ..
+                ' "' .. EquipmentSets:GetName(i) .. '" (' .. equippedItems .. '/' .. hasItems .. '/' .. totalItems .. ')')
+            end
+        end
+
+        EquipmentSets:Log("Total sets stored: " .. cnt .. ", legend: equipped/available/total")
+    elseif args[1] == 'setposition' then
+        local setId = tonumber(args[2])
+        if setId == nil then
+            EquipmentSets:LogError("Set id must be a number")
+            return
+        end
+        if not EquipmentSets:HasSet(setId) then
+            EquipmentSets:LogError("Set id " .. setId .. " is not stored")
+            return
+        end
+
+        local positionId = tonumber(args[3])
+        if positionId == nil then
+            EquipmentSets:LogError("Position id not provided")
+            return
+        end
+
+        if positionId < 1 or positionId > MAX_SLOT_NUMBER then
+            EquipmentSets:LogError("Bad position id provided")
+            return
+        end
+
+        table.removemulti(args, 1, 3)
+        local positionName = table.concat(args, " ") or ""
+        if #positionName > 0 then
+            EquipmentSets:Log('Saving position ' ..
+            positionId .. ' "' .. positionName .. '" to set #' .. setId .. ' "' .. EquipmentSets:GetName(setId) .. '"')
+            EquipmentSets:SaveItem(setId, positionId, positionName)
+        else
+            EquipmentSets:Log('Removing position ' ..
+            positionId .. ' from set #' .. setId .. ' "' .. EquipmentSets:GetName(setId) .. '"')
+            EquipmentSets:SaveItem(setId, positionId, nil)
+        end
+    elseif args[1] == 'reset' then
+        SavedSets = {}
+        savedAmmoSlotItem = nil
     end
-    if not EquipmentSets:HasSet(setId) then
-        EquipmentSets:Log("Set id " .. setId .. " is not stored")
-        return
-    end
-    EquipmentSets:Log("Loading set #" .. setId .. " [" .. EquipmentSets:GetName(setId) .. "]")
-    EquipmentSets:LoadSet(setId)
 end
 
 function EquipmentSets:UnequipEverything()
@@ -424,7 +605,9 @@ function EquipmentSets:Initialize1()
         for xx = 1, MAX_SET_COUNT do
             local info = UIDropDownMenu_CreateInfo()
             info.func = function(self, arg)
-                EquipmentSets:Log("Loading set #" .. arg .. " [" .. EquipmentSets:GetName(arg) .. "]")
+                if EquipmentSets:HasSet(arg) then
+                    EquipmentSets:Log("Loading set #" .. arg .. " [" .. EquipmentSets:GetName(arg) .. "]")
+                end
                 EquipmentSets:LoadSet(arg)
                 CloseDropDownMenus()
             end
@@ -432,20 +615,48 @@ function EquipmentSets:Initialize1()
             info.text, info.arg1, info.checked = EquipmentSets:GetName(xx) or "Empty set " .. xx, xx,
                 EquipmentSets:IsSetEquipped(xx)
             info.tooltipOnButton = true
-            info.tooltipTitle = EquipmentSets:GetName(xx)
+            info.disabled = not EquipmentSets:HasSet(xx)
             local tooltipTexts = {}
+            local totalCnt = 0
+            local equippedCnt = 0
+            local hasMissing = false
             for i = 1, MAX_SLOT_NUMBER do
                 local item = EquipmentSets:GetPositionName(xx, i)
                 if item then
-                    table.insert(tooltipTexts, EquipmentSets.SlotNames[i] .. ':\n' .. '[' .. item .. ']')
+                    totalCnt = totalCnt + 1
+                    local text = EquipmentSets.SlotNames[i] .. ':\n'
+                    if EquipmentSets:GetEquippedName(i) == item then
+                        equippedCnt = equippedCnt + 1
+                        text = text .. GREEN_FONT_COLOR:WrapTextInColorCode(item)
+                    elseif #EquipmentSets:SearchItems(item) > 0 then
+                        text = text .. YELLOW_FONT_COLOR:WrapTextInColorCode(item)
+                    else
+                        hasMissing = true
+                        text = text .. RED_FONT_COLOR:WrapTextInColorCode(item)
+                    end
+                    table.insert(tooltipTexts, text)
                 end
             end
+
+            local cntText = "(" .. equippedCnt .. '/' .. totalCnt .. ')'
+            if equippedCnt == totalCnt then
+                cntText = GREEN_FONT_COLOR:WrapTextInColorCode(cntText)
+            elseif hasMissing then
+                cntText = RED_FONT_COLOR:WrapTextInColorCode(cntText)
+            else
+                cntText = YELLOW_FONT_COLOR:WrapTextInColorCode(cntText)
+            end
+
+            if EquipmentSets:HasSet(xx) then
+                info.tooltipTitle = EquipmentSets:GetName(xx) .. ' ' .. cntText
+            end
+
             info.tooltipText = table.concat(tooltipTexts, '\n\n')
             UIDropDownMenu_AddButton(info)
         end
         local info = UIDropDownMenu_CreateInfo()
         info.func = function()
-            EquipmentSets:Log("Unequip everything")
+            EquipmentSets:Log("Unequipping everything")
             EquipmentSets:UnequipEverything()
             CloseDropDownMenus()
         end
@@ -588,7 +799,7 @@ function EquipmentSets:Initialize1()
             info.notCheckable = true
             info.tooltipOnButton = true
             info.tooltipTitle = not EquipmentSets:HasSet(xx) and "This will create a new loadout" or
-            "This will overwrite [" .. EquipmentSets:GetName(xx) .. "]."
+                "This will overwrite [" .. EquipmentSets:GetName(xx) .. "]."
             info.tooltipText =
             "\nNOTE: If you have an ammo slot, you will have an additional button under your ammo slot. Click on it to select the ammo you want to save before saving your set."
             UIDropDownMenu_AddButton(info)
@@ -605,33 +816,75 @@ function EquipmentSets:Initialize1()
             savedAmmoSlotItem = arg
             CloseDropDownMenus()
         end
-        info.text, info.arg1, info.checked = "Current selection: [" .. savedAmmoSlotItem .. "] (click here to reset)",
+        info.text, info.arg1, info.checked =
+            "Current selection: [" .. (savedAmmoSlotItem or 'Empty Ammo') .. "] (click here to reset)",
             nil, nil == savedAmmoSlotItem
         info.tooltipOnButton = true
-        info.tooltipTitle = "Currently selected: [" .. savedAmmoSlotItem .. "]"
+        info.tooltipTitle = "Currently selected: [" .. (savedAmmoSlotItem or 'Empty Ammo') .. "]"
         info.tooltipText =
-        "\nThis is the ammo you currently are saving along with your equipment sets.\n\nIf you want to save another type of ammo, please select one below.\n\nIMPORTANT: The ammo you will select will be remembered permanently (and used to save a set) until you change it again.\n\nNOTE: Seeing duplicates means you have multiple stacks of that certain ammo in your inventory. It doesn't matter which one you pick, what's important is the name.\n\nSelecting this will revert the saved ammo."
+        "\nThis is the ammo you currently are saving along with your equipment sets.\n\nIf you want to save another type of ammo, please select one below.\n\nIMPORTANT: The ammo you will select will be remembered permanently (and used to save a set) until you change it again."
         UIDropDownMenu_AddButton(info)
+        local ammoList = {}
         for bag = 0, NUM_BAG_SLOTS do
             for slot = 1, C_Container.GetContainerNumSlots(bag) do
                 local itemID = C_Container.GetContainerItemID(bag, slot)
-                if itemID and EquipmentSets.IsArrowsOrBullets(itemID) then
-                    info.func = function(self, arg)
-                        savedAmmoSlotItem = arg
-                        CloseDropDownMenus()
+                if itemID then
+                    if EquipmentSets:IsArrowsOrBullets(itemID) then
+                        local sName = C_Item.GetItemInfo(itemID)
+                        ammoList[sName] = true
                     end
-                    local sName = C_Item.GetItemInfo(itemID);
-                    info.text, info.arg1, info.checked = sName, sName, sName == savedAmmoSlotItem
-                    info.tooltipOnButton = true
-                    info.tooltipTitle = sName
-                    info.tooltipText = "\nSelect [" ..
-                        sName ..
-                        "] to be saved.\n\nIMPORTANT: The ammo you will select will be remembered permanently (and used to save a set) until you change it again.\n\nNOTE: Seeing duplicates means you have multiple stacks of that certain ammo in your inventory. It doesn't matter which one you pick, what's important is the name."
-                    UIDropDownMenu_AddButton(info)
                 end
             end
         end
+
+        for sName in pairs(ammoList) do
+            local info = UIDropDownMenu_CreateInfo()
+            info.func = function(self, arg)
+                savedAmmoSlotItem = arg
+                CloseDropDownMenus()
+            end
+
+            info.text, info.arg1, info.checked = sName, sName, sName == savedAmmoSlotItem
+            info.tooltipOnButton = true
+            info.tooltipTitle = sName
+            info.tooltipText = "\nSelect [" ..
+                sName ..
+                "] to be saved.\n\nIMPORTANT: The ammo you will select will be remembered permanently (and used to save a set) until you change it again."
+            UIDropDownMenu_AddButton(info)
+        end
     end)
+
+    for _, frame in pairs { UIParent:GetChildren() } do
+        if not frame:IsForbidden() and frame:GetObjectType() == 'GameTooltip' then
+            frame:HookScript('OnTooltipCleared', EquipmentSets.OnClear)
+            frame:HookScript('OnTooltipSetItem', EquipmentSets.OnItem)
+        end
+    end
+end
+
+function EquipmentSets.OnClear(tip)
+    tip._hasSets = false
+end
+
+function EquipmentSets.OnItem(tip)
+    local name, link = (tip.GetItem or TooltipUtil.GetDisplayedItem)(tip)
+    if name ~= '' then
+        if not tip._hasSets then
+            local sets = {}
+            for i = 1, MAX_SET_COUNT do
+                if EquipmentSets:HasItem(i, name) then
+                    table.insert(sets, EquipmentSets:GetName(i))
+                end
+            end
+
+            if #sets > 0 then
+                tip:AddDoubleLine('|cFFFFFFFFSets:|r', table.concat(sets, ', '))
+                tip:Show()
+            end
+
+            tip._hasSets = true
+        end
+    end
 end
 
 function EquipmentSets:OnEvent(event, arg1)

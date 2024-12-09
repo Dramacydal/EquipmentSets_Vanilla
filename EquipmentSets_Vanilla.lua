@@ -430,140 +430,253 @@ for i = 1, MAX_SET_COUNT do
     end
 end
 
+local commands = {
+    ["load"] = {
+        ["handler"] = function(args)
+            local setId = tonumber(args[1])
+            if setId == nil then
+                EquipmentSets:LogError("Set id must be a number")
+                return
+            end
+            if not EquipmentSets:HasSet(setId) then
+                EquipmentSets:LogError("Set id " .. setId .. " is not stored")
+                return
+            end
+            EquipmentSets:Log("Loading set #" .. setId .. " \"" .. EquipmentSets:GetName(setId) .. "\"")
+            EquipmentSets:LoadSet(setId)
+        end,
+    },
+    ["save"] = {
+        ["handler"] = function(args)
+            local setId = tonumber(args[1])
+            if setId == nil then
+                EquipmentSets:LogError("Set id must be a number")
+                return
+            end
+            if setId < 1 or setId > MAX_SET_COUNT then
+                EquipmentSets:LogError("Bad set number")
+                return
+            end
+
+            local name = args[2] or ""
+            EquipmentSets:Log("Saving current equpment to set #" ..
+                setId ..
+                " \"" ..
+                (#name > 0 and name or EquipmentSets:GetName(setId) or EquipmentSets:DefaultName(setId)) .. "\"")
+            EquipmentSets:SaveCurrentSet(setId)
+            if #name > 0 then
+                EquipmentSets:SetName(setId, name)
+            end
+        end
+    },
+    ["unequip"] = {
+        ["handler"] = function(args)
+            EquipmentSets:Log("Unequipping all items")
+            EquipmentSets:UnequipEverything()
+        end
+    },
+    ["rename"] = {
+        ["handler"] = function(args)
+            local setId = tonumber(args[1])
+            if setId == nil then
+                EquipmentSets:LogError("Set id must be a number")
+                return
+            end
+            if not EquipmentSets:HasSet(setId) then
+                EquipmentSets:LogError("Set id " .. setId .. " is not stored")
+                return
+            end
+            local name = args[2] or ""
+            if #name == 0 then
+                EquipmentSets:LogError("Name not provided")
+                return
+            end
+
+            EquipmentSets:Log("Renaming equpment set #" .. setId .. " to \"" .. name .. "\"")
+            EquipmentSets:SetName(setId, name)
+        end
+    },
+    ["remove"] = {
+        ["handler"] = function(args)
+            local setId = tonumber(args[1])
+            if setId == nil then
+                EquipmentSets:LogError("Set id must be a number")
+                return
+            end
+            if not EquipmentSets:HasSet(setId) then
+                EquipmentSets:LogError("Set id " .. setId .. " is not stored")
+                return
+            end
+
+            EquipmentSets:Log("Removing equipment set #" .. setId .. " \"" .. EquipmentSets:GetName(setId) .. "\"")
+            EquipmentSets:RemoveSet(setId)
+        end
+    },
+    ["list"] = {
+        ["handler"] = function(args)
+            local cnt = 0
+            for i = 1, MAX_SET_COUNT do
+                if EquipmentSets:HasSet(i) then
+                    cnt = cnt + 1
+                    local totalItems = 0
+                    local hasItems = 0
+                    local equippedItems = 0
+
+                    for j = 1, MAX_SLOT_NUMBER do
+                        local positionName = EquipmentSets:GetPositionName(i, j)
+                        if positionName then
+                            totalItems = totalItems + 1
+                            if EquipmentSets:GetEquippedName(j) == positionName then
+                                hasItems = hasItems + 1
+                                equippedItems = equippedItems + 1
+                            elseif #EquipmentSets:SearchItems(positionName) > 0 then
+                                hasItems = hasItems + 1
+                            end
+                        end
+                    end
+
+                    EquipmentSets:Log("#" ..
+                        i ..
+                        ' "' ..
+                        EquipmentSets:GetName(i) ..
+                        '" (' .. equippedItems .. '/' .. hasItems .. '/' .. totalItems .. ')')
+                end
+            end
+
+            EquipmentSets:Log("Total sets stored: " .. cnt .. ", legend: equipped/available/total")
+        end
+    },
+    ["setposition"] = {
+        ["handler"] = function(args)
+            local setId = tonumber(args[1])
+            if setId == nil then
+                EquipmentSets:LogError("Set id must be a number")
+                return
+            end
+            if not EquipmentSets:HasSet(setId) then
+                EquipmentSets:LogError("Set id " .. setId .. " is not stored")
+                return
+            end
+
+            local positionId = tonumber(args[2])
+            if positionId == nil then
+                EquipmentSets:LogError("Position id not provided")
+                return
+            end
+
+            if positionId < 1 or positionId > MAX_SLOT_NUMBER then
+                EquipmentSets:LogError("Bad position id provided")
+                return
+            end
+
+            table.removemulti(args, 1, 2)
+            local positionName = table.concat(args, " ") or ""
+            if #positionName > 0 then
+                EquipmentSets:Log('Saving position ' ..
+                    positionId ..
+                    ' "' .. positionName .. '" to set #' .. setId .. ' "' .. EquipmentSets:GetName(setId) .. '"')
+                EquipmentSets:SaveItem(setId, positionId, positionName)
+            else
+                EquipmentSets:Log('Removing position ' ..
+                    positionId .. ' from set #' .. setId .. ' "' .. EquipmentSets:GetName(setId) .. '"')
+                EquipmentSets:SaveItem(setId, positionId, nil)
+            end
+        end
+    },
+    ["reset"] = {
+        ["handler"] = function(args)
+            SavedSets = {}
+            savedAmmoSlotItem = nil
+        end
+    },
+    ["test"] = {
+        ["handler"] = function(args)
+            EquipmentSets:Log("Main handler, args: " .. dump(args))
+        end,
+        ["commandTable"] = {
+            ["a"] = {
+                ["handler"] = function(args)
+                    EquipmentSets:Log("Command a, args: " .. dump(args))
+                end
+            },
+            ["b"] = {
+                ["handler"] = function(args)
+                    EquipmentSets:Log("Command b, args: " .. dump(args))
+                end
+            },
+            ["c"] = {
+                ["handler"] = function(args)
+                    EquipmentSets:Log("Command c, args: " .. dump(args))
+                end
+            },
+        }
+    }
+}
+
+function CollectUsages(dataTable)
+    local usages = {}
+    if not dataTable then
+        return {}
+    end
+
+    for subCommand, subData in pairs(dataTable) do
+        if not subData.commandTable then
+            table.insert(usages, subCommand)
+        else
+            if subData.handler then
+                table.insert(usages, subCommand)
+            end
+
+            for _, subUsage in pairs(CollectUsages(subData.commandTable)) do
+                table.insert(usages, subCommand .. ' ' .. subUsage)
+            end
+        end
+    end
+
+    return usages
+end
+
+function ExecuteCommand(commandName, commandTable, args)
+    for command, data in pairs(commandTable) do
+        if command == commandName then
+            if data.commandTable and args[1] then
+                commandName = args[1]
+                table.remove(args, 1)
+                if ExecuteCommand(commandName, data.commandTable, args) then
+                    return true
+                end
+            end
+            
+            if data.handler then
+                data.handler(args)
+                return true
+            end
+
+            return false
+        end
+    end
+
+    return false
+end
+
 SLASH_EQ1 = "/equipmentsets"
 SLASH_EQ2 = "/es"
 SlashCmdList["EQ"] = function(msg)
     local args = pattern_split(msg, "[^ ]+")
-    if args[1] == 'load' then
-        local setId = tonumber(args[2])
-        if setId == nil then
-            EquipmentSets:LogError("Set id must be a number")
-            return
-        end
-        if not EquipmentSets:HasSet(setId) then
-            EquipmentSets:LogError("Set id " .. setId .. " is not stored")
-            return
-        end
-        EquipmentSets:Log("Loading set #" .. setId .. " \"" .. EquipmentSets:GetName(setId) .. "\"")
-        EquipmentSets:LoadSet(setId)
-    elseif args[1] == 'save' then
-        local setId = tonumber(args[2])
-        if setId == nil then
-            EquipmentSets:LogError("Set id must be a number")
-            return
-        end
-        if setId < 1 or setId > MAX_SET_COUNT then
-            EquipmentSets:LogError("Bad set number")
-            return
-        end
 
-        local name = args[3] or ""
-        EquipmentSets:Log("Saving current equpment to set #" ..
-            setId ..
-            " \"" .. (#name > 0 and name or EquipmentSets:GetName(setId) or EquipmentSets:DefaultName(setId)) .. "\"")
-        EquipmentSets:SaveCurrentSet(setId)
-        if #name > 0 then
-            EquipmentSets:SetName(setId, name)
+    if args[1] ~= nil then
+        local command = args[1]
+        table.remove(args, 1)
+        if not ExecuteCommand(command, commands, args) then
+            EquipmentSets:LogError('Unknown command "' .. command .. '"')
         end
-    elseif args[1] == 'uneqiup' then
-        EquipmentSets:Log("Unequipping all items")
-        EquipmentSets:UnequipEverything()
-    elseif args[1] == 'rename' then
-        local setId = tonumber(args[2])
-        if setId == nil then
-            EquipmentSets:LogError("Set id must be a number")
-            return
-        end
-        if not EquipmentSets:HasSet(setId) then
-            EquipmentSets:LogError("Set id " .. setId .. " is not stored")
-            return
-        end
-        local name = args[3]
-        if not name or #name == 0 then
-            EquipmentSets:LogError("Name not provided")
-            return
-        end
+        return
+    end
 
-        EquipmentSets:Log("Renaming equpment set #" .. setId .. " to \"" .. name .. "\"")
-        EquipmentSets:SetName(setId, name)
-    elseif args[1] == 'remove' then
-        local setId = tonumber(args[2])
-        if setId == nil then
-            EquipmentSets:LogError("Set id must be a number")
-            return
-        end
-        if not EquipmentSets:HasSet(setId) then
-            EquipmentSets:LogError("Set id " .. setId .. " is not stored")
-            return
-        end
-
-        EquipmentSets:Log("Removing equipment set #" .. setId .. " \"" .. EquipmentSets:GetName(setId) .. "\"")
-        EquipmentSets:RemoveSet(setId)
-    elseif args[1] == 'list' then
-        local cnt = 0
-        for i = 1, MAX_SET_COUNT do
-            if EquipmentSets:HasSet(i) then
-                cnt = cnt + 1
-                local totalItems = 0
-                local hasItems = 0
-                local equippedItems = 0
-
-                for j = 1, MAX_SLOT_NUMBER do
-                    local positionName = EquipmentSets:GetPositionName(i, j)
-                    if positionName then
-                        totalItems = totalItems + 1
-                        if EquipmentSets:GetEquippedName(j) == positionName then
-                            hasItems = hasItems + 1
-                            equippedItems = equippedItems + 1
-                        elseif #EquipmentSets:SearchItems(positionName) > 0 then
-                            hasItems = hasItems + 1
-                        end
-                    end
-                end
-
-                EquipmentSets:Log("#" ..
-                i ..
-                ' "' .. EquipmentSets:GetName(i) .. '" (' .. equippedItems .. '/' .. hasItems .. '/' .. totalItems .. ')')
-            end
-        end
-
-        EquipmentSets:Log("Total sets stored: " .. cnt .. ", legend: equipped/available/total")
-    elseif args[1] == 'setposition' then
-        local setId = tonumber(args[2])
-        if setId == nil then
-            EquipmentSets:LogError("Set id must be a number")
-            return
-        end
-        if not EquipmentSets:HasSet(setId) then
-            EquipmentSets:LogError("Set id " .. setId .. " is not stored")
-            return
-        end
-
-        local positionId = tonumber(args[3])
-        if positionId == nil then
-            EquipmentSets:LogError("Position id not provided")
-            return
-        end
-
-        if positionId < 1 or positionId > MAX_SLOT_NUMBER then
-            EquipmentSets:LogError("Bad position id provided")
-            return
-        end
-
-        table.removemulti(args, 1, 3)
-        local positionName = table.concat(args, " ") or ""
-        if #positionName > 0 then
-            EquipmentSets:Log('Saving position ' ..
-            positionId .. ' "' .. positionName .. '" to set #' .. setId .. ' "' .. EquipmentSets:GetName(setId) .. '"')
-            EquipmentSets:SaveItem(setId, positionId, positionName)
-        else
-            EquipmentSets:Log('Removing position ' ..
-            positionId .. ' from set #' .. setId .. ' "' .. EquipmentSets:GetName(setId) .. '"')
-            EquipmentSets:SaveItem(setId, positionId, nil)
-        end
-    elseif args[1] == 'reset' then
-        SavedSets = {}
-        savedAmmoSlotItem = nil
+    EquipmentSets:Log("Available commands:")
+    local usages = CollectUsages(commands)
+    for _, usage in pairs(usages) do
+        EquipmentSets:Log("/es " .. usage)
     end
 end
 

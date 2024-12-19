@@ -13,6 +13,13 @@ local frame = CreateFrame("FRAME");
 
 local MAX_SLOT_NUMBER = 20
 
+local Colors = {
+    GREEN = GREEN_FONT_COLOR,
+    RED = RED_FONT_COLOR,
+    YELLOW = YELLOW_FONT_COLOR,
+    LIGHT_YELLOW = LIGHTYELLOW_FONT_COLOR
+}
+
 if not table.removemulti then
     table.removemulti = function(self, pos, cnt)
         for i = 1, cnt do
@@ -57,7 +64,7 @@ function es:GetSetByName(name)
 end
 
 function es:Log(msg)
-    DEFAULT_CHAT_FRAME:AddMessage(LIGHTYELLOW_FONT_COLOR_CODE .. '<es>: ' .. msg);
+    DEFAULT_CHAT_FRAME:AddMessage(self:Colorize(Colors.LIGHT_YELLOW, '<es>: ' .. msg))
 end
 
 function es:Colorize(color, msg)
@@ -69,7 +76,7 @@ function es:Colorize(color, msg)
 end
 
 function es:LogError(msg)
-    self:Log("|c" .. RED_FONT_COLOR:GenerateHexColor() .. msg)
+    self:Log(self:Colorize(Colors.RED, msg))
 end
 
 function es:EquipItemFromSet(setId, slot, dstSlot)
@@ -319,6 +326,20 @@ function es:IsBankBagId(bagId)
     return bagId == -1 or bagId > NUM_BAG_SLOTS
 end
 
+function es:ShowConfirmation(text, func)
+    StaticPopupDialogs['CONFIRMATION_POPUP'] = {
+        text = text,
+        button1 = "Yes",
+        button2 = "No",
+        OnAccept = func,
+        timeout = 0,
+        whileDead = true,
+        hideOnEscape = true,
+        preferredIndex = 3,
+    }
+    StaticPopup_Show("CONFIRMATION_POPUP")
+end
+
 es.SlotInfo = {
     [1] = {
         ['name'] = 'Ammo',
@@ -445,7 +466,7 @@ function es:EquipSet(setId)
             if x == 1 or self:GetEquippedName(x) ~= name then
                 local result = self:SearchItems(name)
                 if #result == 0 then
-                    self:LogError("Item " .. self:Colorize(YELLOW_FONT_COLOR, name) .. ' for slot ' .. self.SlotInfo[x].name .. ' not found.')
+                    self:LogError("Item " .. self:Colorize(Colors.YELLOW, name) .. ' for slot ' .. self.SlotInfo[x].name .. ' not found.')
                 end
 
                 -- self:Log("Equipping " .. name .. ' to ' .. x)
@@ -506,15 +527,15 @@ for i = 1, 10 do
 end
 
 local commands = {
-    ["equip"] = {
-        ["handler"] = function(args)
+    equip = {
+        handler = function(args)
             local setId = tonumber(args[1])
             if setId == nil then
                 local setName = table.concat(args, ' ') or ''
                 if setName ~= '' then
                     setId = es:GetSetByName(setName)
                     if not setId then
-                        es:LogError("Set " .. es:Colorize(YELLOW_FONT_COLOR, setName) .. ' not found')
+                        es:LogError("Set " .. es:Colorize(Colors.YELLOW, setName) .. ' not found')
                         return
                     end
                 end
@@ -529,20 +550,22 @@ local commands = {
                 es:LogError("Set id " .. setId .. " is not stored")
                 return
             end
-            es:Log("Equipping set №" .. setId .. " " .. es:GetName(setId, YELLOW_FONT_COLOR))
+            es:Log("Equipping set №" .. setId .. " " .. es:GetName(setId, Colors.YELLOW))
             es:EquipSet(setId)
         end,
     },
-    ["save"] = {
-        ["handler"] = function(args)
+    save = {
+        handler = function(args)
             local setId, name
             if args[1] == nil then
                 setId = #SavedSets + 1
                 name = es:DefaultName(setId)
             elseif tonumber(args[1]) ~= nil then
                 setId = tonumber(args[1])
-                name = args[2] or ''
-                
+
+                table.removemulti(args, 1, 1)
+                name = table.concat(args, ' ') or ''
+
                 if setId > #SavedSets then
                     setId = #SavedSets + 1
                     if name == '' then
@@ -552,8 +575,11 @@ local commands = {
                     name = es:GetName(setId)
                 end
             elseif (args[1] or '') ~= '' then
-                setId = #SavedSets + 1
-                name = args[1]
+                name = table.concat(args, ' ')
+                setId = es:GetSetByName(name)
+                if setId == nil then
+                    setId = #SavedSets + 1
+                end
             else
                 setId = #SavedSets + 1
                 name = es:DefaultName(setId)
@@ -570,21 +596,21 @@ local commands = {
             end
 
             es:Log("Saving current equpment to set №" ..
-                setId .. " " .. es:Colorize(YELLOW_FONT_COLOR, #name > 0 and name or es:GetName(setId) or es:DefaultName(setId)))
+                setId .. " " .. es:Colorize(Colors.YELLOW, #name > 0 and name or es:GetName(setId) or es:DefaultName(setId)))
             es:SaveCurrentSet(setId)
             if #name > 0 then
                 es:SetName(setId, name)
             end
         end
     },
-    ["unequip"] = {
-        ["handler"] = function(args)
+    unequip = {
+        handler = function(args)
             es:Log("Unequipping all items")
             es:UnequipEverything()
         end
     },
-    ["rename"] = {
-        ["handler"] = function(args)
+    rename = {
+        handler = function(args)
             local setId = tonumber(args[1])
             if setId == nil then
                 es:LogError("Set id must be a number")
@@ -594,7 +620,9 @@ local commands = {
                 es:LogError("Set id " .. setId .. " is not stored")
                 return
             end
-            local name = args[2] or ""
+
+            table.removemulti(args, 1, 1)
+            local name = table.concat(args, " ") or ""
             if #name == 0 then
                 es:LogError("Name not provided")
                 return
@@ -604,24 +632,36 @@ local commands = {
             es:SetName(setId, name)
         end
     },
-    ["remove"] = {
-        ["handler"] = function(args)
+    remove = {
+        handler = function(args)
             local setId = tonumber(args[1])
             if setId == nil then
-                es:LogError("Set id must be a number")
+                local setName = table.concat(args, ' ') or ''
+                if setName ~= '' then
+                    setId = es:GetSetByName(setName)
+                    if not setId then
+                        es:LogError("Set " .. es:Colorize(Colors.YELLOW, setName) .. ' not found')
+                        return
+                    end
+                end
+            end
+
+            if not setId then
+                es:LogError("Set id or name must be specified")
                 return
             end
+
             if not es:HasSet(setId) then
                 es:LogError("Set id " .. setId .. " is not stored")
                 return
             end
 
-            es:Log("Removing equipment set №" .. setId .. " " .. es:GetName(setId, YELLOW_FONT_COLOR))
+            es:Log("Removing equipment set №" .. setId .. " " .. es:GetName(setId, Colors.YELLOW))
             es:RemoveSet(setId)
         end
     },
-    ["list"] = {
-        ["handler"] = function(args)
+    list = {
+        handler = function(args)
             local cnt = 0
             es:Each(function (i)
                 cnt = cnt + 1
@@ -642,13 +682,13 @@ local commands = {
                     end
                 end
 
-                es:Log("№" .. i .. ' ' .. es:GetName(i, YELLOW_FONT_COLOR) .. '" (' .. equippedItems .. '/' .. hasItems .. '/' .. totalItems .. ')')
+                es:Log("№" .. i .. ' ' .. es:GetName(i, Colors.YELLOW) .. ' (' .. equippedItems .. '/' .. hasItems .. '/' .. totalItems .. ')')
             end)
-            es:Log("Total sets stored: " .. es:Colorize(YELLOW_FONT_COLOR, cnt) .. ", legend: equipped/available/total")
+            es:Log("Total sets stored: " .. es:Colorize(Colors.YELLOW, cnt) .. ", legend: equipped/available/total")
         end
     },
-    ["setposition"] = {
-        ["handler"] = function(args)
+    setposition = {
+        handler = function(args)
             local setId = tonumber(args[1])
             if setId == nil then
                 es:LogError("Set id must be a number")
@@ -673,36 +713,38 @@ local commands = {
             table.removemulti(args, 1, 2)
             local positionName = table.concat(args, " ") or ""
             if #positionName > 0 then
-                es:Log('Saving position ' .. positionId .. ' "' .. positionName .. '" to set №' .. setId .. ' ' .. es:GetName(setId, YELLOW_FONT_COLOR))
+                es:Log('Saving position ' .. positionId .. ' "' .. positionName .. '" to set №' .. setId .. ' ' .. es:GetName(setId, Colors.YELLOW))
                 es:SaveItem(setId, positionId, positionName)
             else
-                es:Log('Removing position ' .. positionId .. ' from set №' .. setId .. ' ' .. es:GetName(setId, YELLOW_FONT_COLOR))
+                es:Log('Removing position ' .. positionId .. ' from set №' .. setId .. ' ' .. es:GetName(setId, Colors.YELLOW))
                 es:SaveItem(setId, positionId, nil)
             end
         end
     },
-    ["reset"] = {
-        ["handler"] = function(args)
-            SavedSets = {}
+    reset = {
+        handler = function(args)
+            es:ShowConfirmation("Wipe " .. es:Colorize(Colors.RED, 'ALL') .. ' stored equipments sets?', function ()
+                SavedSets = {}
+            end)
         end
     },
-    ["test"] = {
-        ["handler"] = function(args)
+    test = {
+        handler = function(args)
             es:Log("Main handler, args: " .. dump(args))
         end,
-        ["commandTable"] = {
-            ["a"] = {
-                ["handler"] = function(args)
+        commandTable = {
+            a = {
+                handler = function(args)
                     es:Log("Command a, args: " .. dump(args))
                 end
             },
-            ["b"] = {
-                ["handler"] = function(args)
+            b = {
+                handler = function(args)
                     es:Log("Command b, args: " .. dump(args))
                 end
             },
-            ["c"] = {
-                ["handler"] = function(args)
+            c = {
+                handler = function(args)
                     es:Log("Command c, args: " .. dump(args))
                 end
             },
@@ -859,7 +901,7 @@ function es:Initialize1()
             if (level or 1) == 1 then
                 info.func = function(self, arg)
                     if es:HasSet(arg) then
-                        es:Log("Loading set №" .. arg .. " " .. es:GetName(arg, YELLOW_FONT_COLOR))
+                        es:Log("Loading set №" .. arg .. " " .. es:GetName(arg, Colors.YELLOW))
                     end
                     es:EquipSet(arg)
                     CloseDropDownMenus()
@@ -881,12 +923,12 @@ function es:Initialize1()
                         local text = es.SlotInfo[i].name .. ':\n'
                         if es:GetEquippedName(i) == item then
                             equippedCnt = equippedCnt + 1
-                            text = text .. es:Colorize(GREEN_FONT_COLOR, item)
+                            text = text .. es:Colorize(Colors.GREEN, item)
                         elseif #es:SearchItems(item) > 0 then
-                            text = text .. es:Colorize(YELLOW_FONT_COLOR, item)
+                            text = text .. es:Colorize(Colors.YELLOW, item)
                         else
                             hasMissing = true
-                            text = text .. es:Colorize(RED_FONT_COLOR, item)
+                            text = text .. es:Colorize(Colors.RED, item)
                         end
                         table.insert(tooltipTexts, text)
                     end
@@ -894,11 +936,11 @@ function es:Initialize1()
 
                 local cntText = "(" .. equippedCnt .. '/' .. totalCnt .. ')'
                 if equippedCnt == totalCnt then
-                    cntText = es:Colorize(GREEN_FONT_COLOR, cntText)
+                    cntText = es:Colorize(Colors.GREEN, cntText)
                 elseif hasMissing then
-                    cntText = es:Colorize(RED_FONT_COLOR, cntText)
+                    cntText = es:Colorize(Colors.RED, cntText)
                 else
-                    cntText = es:Colorize(YELLOW_FONT_COLOR, cntText)
+                    cntText = es:Colorize(Colors.YELLOW, cntText)
                 end
 
                 info.tooltipTitle = es:GetName(xx) .. ' ' .. cntText
@@ -918,7 +960,7 @@ function es:Initialize1()
             info.notCheckable = true
             info.tooltipOnButton, info.checked, info.disabled = true, false, false
             info.tooltipTitle = "Create new set"
-            info.tooltipText = "Create new equipment set with name prompt."
+            info.tooltipText = "Create new loadout from currently equipped items"
             info.hasArrow = false
             UIDropDownMenu_AddButton(info)
 
@@ -933,14 +975,14 @@ function es:Initialize1()
             info.notCheckable = true
             info.tooltipOnButton, info.checked, info.disabled = true, false, false
             info.tooltipTitle = "Unequip Everything"
-            info.tooltipText = "Select this to unequip everything."
+            info.tooltipText = "Click this to unequip everything"
             info.hasArrow = false
             UIDropDownMenu_AddButton(info)
         else
             info.func = function(self, arg1, arg2)
                 local text, OnAccept
                 if arg2 == 'save' then
-                    text = "Set " .. es:GetName(arg1, YELLOW_FONT_COLOR) .. " will be " .. es:Colorize(YELLOW_FONT_COLOR, "overwritten") .. ". \n\n\nContinue?"
+                    text = "Overwrite equipment set " .. es:GetName(arg1, Colors.YELLOW) .. " ?"
                     OnAccept = function()
                         es:SaveCurrentSet(arg1)
                     end
@@ -950,7 +992,7 @@ function es:Initialize1()
                     CloseDropDownMenus()
                     return
                 elseif arg2 == 'delete' then
-                    text = "Set " .. es:GetName(arg1, YELLOW_FONT_COLOR) .. " will be " .. es:Colorize(RED_FONT_COLOR, "deleted") .. ". \n\n\nContinue?"
+                    text = "Delete equipment set " .. es:GetName(arg1, Colors.RED) .. " ?"
                     OnAccept = function()
                         es:RemoveSet(arg1)
                     end
@@ -959,17 +1001,7 @@ function es:Initialize1()
                     return
                 end
 
-                StaticPopupDialogs['CONFIRMATION_POPUP'] = {
-                    text = text,
-                    button1 = "Yes",
-                    button2 = "No",
-                    OnAccept = OnAccept,
-                    timeout = 0,
-                    whileDead = true,
-                    hideOnEscape = true,
-                    preferredIndex = 3,
-                }
-                StaticPopup_Show("CONFIRMATION_POPUP")
+                es:ShowConfirmation(text, OnAccept)
                 CloseDropDownMenus()
             end
             -- local info = UIDropDownMenu_CreateInfo()
@@ -981,19 +1013,19 @@ function es:Initialize1()
 
             info.text, info.arg2 = "Save", 'save'
             info.tooltipTitle = "Save set"
-            info.tooltipText = "Overwrite equipment set " .. es:GetName(menuList, YELLOW_FONT_COLOR) .. " with currently equipped items."
+            info.tooltipText = "Overwrite equipment set " .. es:GetName(menuList, Colors.YELLOW) .. " with currently equipped items."
             UIDropDownMenu_AddButton(info, level)
 
             -- local info = UIDropDownMenu_CreateInfo()
             info.text, info.arg2 = "Rename", 'rename'
             info.tooltipTitle = "Rename set"
-            info.tooltipText = "Rename equipment set " .. es:GetName(menuList, YELLOW_FONT_COLOR)
+            info.tooltipText = "Rename equipment set " .. es:GetName(menuList, Colors.YELLOW)
             UIDropDownMenu_AddButton(info, level)
 
             -- local info = UIDropDownMenu_CreateInfo()
             info.text, info.arg2 = "Delete", 'delete'
             info.tooltipTitle = "Delete set"
-            info.tooltipText = "Delete equipment set " .. es:GetName(menuList, YELLOW_FONT_COLOR)
+            info.tooltipText = "Delete equipment set " .. es:GetName(menuList, Colors.YELLOW)
             UIDropDownMenu_AddButton(info, level)
         end
     end)

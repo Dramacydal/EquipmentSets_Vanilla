@@ -1,9 +1,9 @@
 ## Interface: 11505
 ## Title : EquipmentSets
-## Version : 1.4.8b-VanillaEra
-## Notes: Allows you to save your own gear presets and switch between them. -- You can also use "/unequipall" to remove all your gear at once.
-## SavedVariablesPerCharacter: SavedSets savedAmmoSlotItem
+## Version : 2.0.0
+## Notes: Allows you to save your own gear presets and switch between them. Command: /es
+## SavedVariablesPerCharacter: SavedSets
 ## DefaultState : enabled
-## Author: Fr0stwing
+## Author: Fr0stwing, Dramacydal
 
 EquipmentSets_Vanilla.lua

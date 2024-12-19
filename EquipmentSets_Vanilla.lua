@@ -151,13 +151,12 @@ function es:UneqipSlot(slot, bagId)
         return true
     end
 
-    for i = 0, NUM_BAG_SLOTS do
-        if C_Container.GetContainerNumFreeSlots(i) > 0 then
-            -- self:Log("Unequipping " .. slot .. ' to ' .. i)
-            PickupInventoryItem(slot - 1)
-            self:PutItemInBag(i);
-            return true
-        end
+    local freeSlots = self:GetFreeSlots()
+    for i in pairs(freeSlots) do
+        PickupInventoryItem(slot - 1)
+        self:PutItemInBag(i);
+        -- self:Log("Unequipping " .. slot .. ' to ' .. i)
+        return true
     end
 
     self:LogError("Failed to unequip items, no free space in bags.")
@@ -165,14 +164,26 @@ function es:UneqipSlot(slot, bagId)
     return false
 end
 
-function es:UneqipSlots(slots)
+function es:GetFreeSlots()
     local freeSlots = {}
+    local numFreeSlots = 0
     for i = 0, NUM_BAG_SLOTS do
-        freeSlots[i] = C_Container.GetContainerNumFreeSlots(i)
+        local freeNum = C_Container.GetContainerNumFreeSlots(i)
+        if freeNum > 0 then
+            freeSlots[i] = freeNum
+            numFreeSlots = numFreeSlots + 1
+        end
     end
+
+    return freeSlots, numFreeSlots
+end
+
+function es:UneqipSlots(slots)
+    local freeSlots = es:GetFreeSlots()
 
     local spaceError = false
     for _, slot in pairs(slots) do
+        -- for ammo slot space is not needed
         if slot ~= 1 and self:GetEquippedName(slot) then
             local foundSpace = false
             for bagId, num in pairs(freeSlots) do
@@ -259,7 +270,9 @@ function es:IsSetEquipped(setId)
 end
 
 function es:GetEquippedName(slotId)
-    local equipmentSlotId = GetInventorySlotInfo(self.SlotCodes[slotId])
+    local equipmentSlotId = GetInventorySlotInfo(self.SlotInfo[slotId].code)
+
+    -- special ammo handling
     if equipmentSlotId == 0 then
         local itemId = GetInventoryItemID("player", equipmentSlotId)
         if itemId then
@@ -277,15 +290,8 @@ end
 
 function es:SearchItems(name)
     local result = {}
-    for i = 0, NUM_BANKGENERIC_SLOTS do
-        local info = C_Container.GetContainerItemInfo(BANK_CONTAINER, i)
-        if info and info.itemName then
-            if info.itemName == name then
-                table.insert(result, { BANK_CONTAINER, i })
-            end
-        end
-    end
 
+    -- first return bags, then bank
     for bagId = 0, NUM_BAG_SLOTS + GetNumBankSlots() do
         for i = 1, C_Container.GetContainerNumSlots(bagId) do
             local info = C_Container.GetContainerItemInfo(bagId, i)
@@ -297,39 +303,104 @@ function es:SearchItems(name)
         end
     end
 
-    return result
-end
-
-function es:IsValidBag(bagid)
-    if bagid == 0 or bagid == -1 then
-        return true
-    else
-        local _, bagFamily = C_Container.GetContainerNumFreeSlots(bagid)
-        if bagFamily == 0 then
-            return true
+    for i = 0, NUM_BANKGENERIC_SLOTS do
+        local info = C_Container.GetContainerItemInfo(BANK_CONTAINER, i)
+        if info and info.itemName then
+            if info.itemName == name then
+                table.insert(result, { BANK_CONTAINER, i })
+            end
         end
     end
 
-    return false
+    return result
 end
 
-function es:IsArrowsOrBullets(itemId)
-    local _, _, _, _, _, classID, subClassID = C_Item.GetItemInfoInstant(itemId)
-
-    return classID == 6 and (subClassID == 2 or subClassID == 3)
+function es:IsBankBagId(bagId)
+    return bagId == -1 or bagId > NUM_BAG_SLOTS
 end
 
--- SavedVariables
-savedAmmoSlotItem = nil
-
-es.SlotNames = { "Ammo", "Head", "Neck", "Shoulder", "Shirt", "Chest", "Waist",
-    "Legs", "Feet", "Wrist", "Hands", "Finger 1", "Finger 2", "Trinket 1",
-    "Trinket 2", "Back", "Main Hand", "Off Hand", "Ranged or Relic", "Tabard" }
-
-es.SlotCodes = { "AmmoSlot", "HeadSlot", "NeckSlot", "ShoulderSlot", "ShirtSlot", "ChestSlot", "WaistSlot",
-    "LegsSlot",
-    "FeetSlot", "WristSlot", "HandsSlot", "Finger0Slot", "Finger1Slot", "Trinket0Slot", "Trinket1Slot", "BackSlot",
-    "MainHandSlot", "SecondaryHandSlot", "RangedSlot", "TabardSlot" }
+es.SlotInfo = {
+    [1] = {
+        ['name'] = 'Ammo',
+        ['code'] = 'AmmoSlot',
+    },
+    [2] = {
+        ['name'] = 'Head',
+        ['code'] = 'HeadSlot',
+    },
+    [3] = {
+        ['name'] = 'Neck',
+        ['code'] = 'NeckSlot',
+    },
+    [4] = {
+        ['name'] = 'Shoulder',
+        ['code'] = 'ShoulderSlot',
+    },
+    [5] = {
+        ['name'] = 'Shirt',
+        ['code'] = 'ShirtSlot',
+    },
+    [6] = {
+        ['name'] = 'Chest',
+        ['code'] = 'ChestSlot',
+    },
+    [7] = {
+        ['name'] = 'Waist',
+        ['code'] = 'WaistSlot',
+    },
+    [8] = {
+        ['name'] = 'Legs',
+        ['code'] = 'LegsSlot',
+    },
+    [9] = {
+        ['name'] = 'Feet',
+        ['code'] = 'FeetSlot',
+    },
+    [10] = {
+        ['name'] = 'Wrist',
+        ['code'] = 'WristSlot',
+    },
+    [11] = {
+        ['name'] = 'Hands',
+        ['code'] = 'HandsSlot',
+    },
+    [12] = {
+        ['name'] = 'Finger 1',
+        ['code'] = 'Finger0Slot',
+    },
+    [13] = {
+        ['name'] = 'Finger 2',
+        ['code'] = 'Finger1Slot',
+    },
+    [14] = {
+        ['name'] = 'Trinket 1',
+        ['code'] = 'Trinket0Slot',
+    },
+    [15] = {
+        ['name'] = 'Trinket 2',
+        ['code'] = 'Trinket1Slot',
+    },
+    [16] = {
+        ['name'] = 'Back',
+        ['code'] = 'BackSlot',
+    },
+    [17] = {
+        ['name'] = 'Main Hand',
+        ['code'] = 'MainHandSlot',
+    },
+    [18] = {
+        ['name'] = 'Off Hand',
+        ['code'] = 'SecondaryHandSlot',
+    },
+    [19] = {
+        ['name'] = 'Ranged or Relic',
+        ['code'] = 'RangedSlot',
+    },
+    [20] = {
+        ['name'] = 'Tabard',
+        ['code'] = 'TabardSlot',
+    },
+}
 
 -- Dump function
 function dump(o)
@@ -345,28 +416,19 @@ function dump(o)
     end
 end
 
-function es:UnequipWeaponsRingsAndTrinkets()
-    self:UneqipSlots({ 11, 12, 13, 14, 16, 17 })
-end
-
-function es:SaveCurrentSet(currentSetNumber)
-    local currentName = self:GetName(currentSetNumber)
+function es:SaveCurrentSet(setId)
+    local currentName = self:GetName(setId)
     if (currentName == nil or currentName == "") then
-        currentName = self:DefaultName(currentSetNumber)
+        currentName = self:DefaultName(setId)
     end
 
-    self:ResetSet(currentSetNumber, currentName)
-    self:SaveItem(currentSetNumber, 1, savedAmmoSlotItem)
-    for x = 2, MAX_SLOT_NUMBER do
-        local name = self:GetEquippedName(x)
-        if x == 1 then
-            name = savedAmmoSlotItem
-        end
-        self:SaveItem(currentSetNumber, x, name)
+    self:ResetSet(setId, currentName)
+    for x = 1, MAX_SLOT_NUMBER do
+        self:SaveItem(setId, x, self:GetEquippedName(x))
     end
 end
 
-function es:LoadSet(setId)
+function es:EquipSet(setId)
     if not self:HasSet(setId) then
         self:Log("You must save a set to this slot first.")
         return
@@ -380,10 +442,10 @@ function es:LoadSet(setId)
             table.insert(toUnequip, x)
         else
             -- self:Log("Equipped at " .. x .. ': ' .. tostring(self:GetEquippedName(x)))
-            if self:GetEquippedName(x) ~= name then
+            if x == 1 or self:GetEquippedName(x) ~= name then
                 local result = self:SearchItems(name)
                 if #result == 0 then
-                    self:LogError("Item [" .. name .. '] not found.')
+                    self:LogError("Item " .. self:Colorize(YELLOW_FONT_COLOR, name) .. ' for slot ' .. self.SlotInfo[x].name .. ' not found.')
                 end
 
                 -- self:Log("Equipping " .. name .. ' to ' .. x)
@@ -393,14 +455,36 @@ function es:LoadSet(setId)
 
                     if (not usedSlots[bagId] or usedSlots[bagId] and not usedSlots[bagId][bagSlot]) then
                         -- self:Log("Equipping " .. name .. ' from ' .. bagId .. ' ' .. bagSlot .. ' to ' .. (x - 1))
-                        if x - 1 == 0 then
-                            C_Item.EquipItemByName(name)
+                        -- special ammo handling
+
+                        if x == 1 then
+                            if self.isBankOpen then
+                                if self:GetEquippedName(x) ~= name then
+                                    -- only works when bank is open
+                                    self:EquipItemFromBag(bagId, bagSlot, x - 1)
+                                end
+
+                                -- if ammo in bank - move to inventory
+                                if self:IsBankBagId(bagId) then
+                                    local _, numFreeSlots = self:GetFreeSlots()
+                                    if numFreeSlots == 0 then
+                                        self:LogError('Not enough inventory space to equip ammo')
+                                    else
+                                        C_Container.UseContainerItem(bagId, bagSlot)
+                                    end
+                                end
+                            else
+                                -- only works when bank is not open
+                                C_Item.EquipItemByName(name)
+                            end
                         else
                             self:EquipItemFromBag(bagId, bagSlot, x - 1)
                         end
+
                         if not usedSlots[bagId] then
                             usedSlots[bagId] = {}
                         end
+
                         usedSlots[bagId][bagSlot] = true
                         break
                     end
@@ -417,12 +501,12 @@ end
 for i = 1, 10 do
     _G["SLASH_LOADSET" .. i .. '1'] = "/loadset" .. 1
     SlashCmdList["LOADSET" .. i] = function(msg)
-        es:LoadSet(i)
+        es:EquipSet(i)
     end
 end
 
 local commands = {
-    ["load"] = {
+    ["equip"] = {
         ["handler"] = function(args)
             local setId = tonumber(args[1])
             if setId == nil then
@@ -445,8 +529,8 @@ local commands = {
                 es:LogError("Set id " .. setId .. " is not stored")
                 return
             end
-            es:Log("Loading set №" .. setId .. " " .. es:GetName(setId, YELLOW_FONT_COLOR))
-            es:LoadSet(setId)
+            es:Log("Equipping set №" .. setId .. " " .. es:GetName(setId, YELLOW_FONT_COLOR))
+            es:EquipSet(setId)
         end,
     },
     ["save"] = {
@@ -600,7 +684,6 @@ local commands = {
     ["reset"] = {
         ["handler"] = function(args)
             SavedSets = {}
-            savedAmmoSlotItem = nil
         end
     },
     ["test"] = {
@@ -626,6 +709,8 @@ local commands = {
         }
     }
 }
+
+commands['load'] = commands['equip']
 
 function CollectUsages(dataTable)
     local usages = {}
@@ -709,6 +794,7 @@ end
 
 function es:Initialize1()
     self.NameInputs = {}
+    self.isBankOpen = false
 
     local fSettings = CreateFrame("Frame", nil, UIParent, "BasicFrameTemplateWithInset") --Create a frame
     fSettings:SetFrameStrata("TOOLTIP")                                                  --Set its strata
@@ -775,7 +861,7 @@ function es:Initialize1()
                     if es:HasSet(arg) then
                         es:Log("Loading set №" .. arg .. " " .. es:GetName(arg, YELLOW_FONT_COLOR))
                     end
-                    es:LoadSet(arg)
+                    es:EquipSet(arg)
                     CloseDropDownMenus()
                 end
 
@@ -792,7 +878,7 @@ function es:Initialize1()
                     local item = es:GetPositionName(xx, i)
                     if item then
                         totalCnt = totalCnt + 1
-                        local text = es.SlotNames[i] .. ':\n'
+                        local text = es.SlotInfo[i].name .. ':\n'
                         if es:GetEquippedName(i) == item then
                             equippedCnt = equippedCnt + 1
                             text = text .. es:Colorize(GREEN_FONT_COLOR, item)
@@ -855,12 +941,6 @@ function es:Initialize1()
                 local text, OnAccept
                 if arg2 == 'save' then
                     text = "Set " .. es:GetName(arg1, YELLOW_FONT_COLOR) .. " will be " .. es:Colorize(YELLOW_FONT_COLOR, "overwritten") .. ". \n\n\nContinue?"
-
-                    if savedAmmoSlotItem then
-                        text = text .. "\n\n\nFor classes with ammo, the following will save:\n" ..
-                            "[" .. savedAmmoSlotItem .. "]"
-                    end
-
                     OnAccept = function()
                         es:SaveCurrentSet(arg1)
                     end
@@ -901,8 +981,7 @@ function es:Initialize1()
 
             info.text, info.arg2 = "Save", 'save'
             info.tooltipTitle = "Save set"
-            info.tooltipText = "Overwrite equipment set " .. es:GetName(menuList, YELLOW_FONT_COLOR) .. " with currently equipped items." ..
-            "\nNOTE: If you have an ammo slot, you will have an additional button under your ammo slot. Click on it to select the ammo you want to save before saving your set."
+            info.tooltipText = "Overwrite equipment set " .. es:GetName(menuList, YELLOW_FONT_COLOR) .. " with currently equipped items."
             UIDropDownMenu_AddButton(info, level)
 
             -- local info = UIDropDownMenu_CreateInfo()
@@ -930,54 +1009,6 @@ function es:Initialize1()
         end
     end)
 
-    -- AmmoSlotStuff
-    local dropDown3 = CreateFrame("FRAME", nil, CharacterAmmoSlot, "UIDropDownMenuTemplate")
-    dropDown3:SetPoint("BOTTOM", 0, -28)
-    UIDropDownMenu_SetWidth(dropDown3, 8)
-    UIDropDownMenu_Initialize(dropDown3, function(self, level, menuList)
-        local info = UIDropDownMenu_CreateInfo()
-        info.func = function(self, arg)
-            savedAmmoSlotItem = arg
-            CloseDropDownMenus()
-        end
-        info.text, info.arg1, info.checked =
-            "Current selection: [" .. (savedAmmoSlotItem or 'Empty Ammo') .. "] (click here to reset)",
-            nil, nil == savedAmmoSlotItem
-        info.tooltipOnButton = true
-        info.tooltipTitle = "Currently selected: [" .. (savedAmmoSlotItem or 'Empty Ammo') .. "]"
-        info.tooltipText =
-        "\nThis is the ammo you currently are saving along with your equipment sets.\n\nIf you want to save another type of ammo, please select one below.\n\nIMPORTANT: The ammo you will select will be remembered permanently (and used to save a set) until you change it again."
-        UIDropDownMenu_AddButton(info)
-        local ammoList = {}
-        for bag = 0, NUM_BAG_SLOTS do
-            for slot = 1, C_Container.GetContainerNumSlots(bag) do
-                local itemID = C_Container.GetContainerItemID(bag, slot)
-                if itemID then
-                    if es:IsArrowsOrBullets(itemID) then
-                        local sName = C_Item.GetItemInfo(itemID)
-                        ammoList[sName] = true
-                    end
-                end
-            end
-        end
-
-        for sName in pairs(ammoList) do
-            local info = UIDropDownMenu_CreateInfo()
-            info.func = function(self, arg)
-                savedAmmoSlotItem = arg
-                CloseDropDownMenus()
-            end
-
-            info.text, info.arg1, info.checked = sName, sName, sName == savedAmmoSlotItem
-            info.tooltipOnButton = true
-            info.tooltipTitle = sName
-            info.tooltipText = "\nSelect [" ..
-                sName ..
-                "] to be saved.\n\nIMPORTANT: The ammo you will select will be remembered permanently (and used to save a set) until you change it again."
-            UIDropDownMenu_AddButton(info)
-        end
-    end)
-
     for _, frame in pairs { UIParent:GetChildren() } do
         if not frame:IsForbidden() and frame:GetObjectType() == 'GameTooltip' then
             frame:HookScript('OnTooltipCleared', es.OnClear)
@@ -991,7 +1022,7 @@ function es.OnClear(tip)
 end
 
 function es.OnItem(tip)
-    local name, link = (tip.GetItem or TooltipUtil.GetDisplayedItem)(tip)
+    local name = (tip.GetItem or TooltipUtil.GetDisplayedItem)(tip)
     if name ~= '' then
         if not tip._hasSets then
             local sets = {}
@@ -1018,8 +1049,14 @@ function es:OnEvent(event, arg1)
         end
 
         es:Initialize1()
+    elseif event == "BANKFRAME_OPENED" then
+        es.isBankOpen = true
+    elseif event == "BANKFRAME_CLOSED" then
+        es.isBankOpen = false
     end
 end
 
 frame:SetScript("OnEvent", es.OnEvent);
 frame:RegisterEvent("ADDON_LOADED");
+frame:RegisterEvent("BANKFRAME_OPENED");
+frame:RegisterEvent("BANKFRAME_CLOSED");

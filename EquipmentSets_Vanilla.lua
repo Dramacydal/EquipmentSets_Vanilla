@@ -79,21 +79,39 @@ function es:LogError(msg)
     self:Log(self:Colorize(Colors.RED, msg))
 end
 
-function es:EquipItemFromSet(setId, slot, dstSlot)
-    local name = self:GetPositionName(setId, slot)
-    if name ~= nil then
-        self:EquipItemByName(name, dstSlot)
-    else
-        self:UneqipSlot(slot)
-    end
-end
-
 function es:GetPositionName(setId, slot)
     if not self:HasSet(setId) then
         return nil
     end
 
     return SavedSets[setId].items[slot]
+end
+
+function es:IsDoubleSlot(slot)
+    -- 14 15 trinket
+    -- 12 13 finger
+    -- 17 18 main hand off hand
+
+    for _, value in pairs({ 12, 13, 14, 15, 17, 18 }) do
+        if value == slot then
+            return true
+        end
+    end
+
+    return false
+end
+
+function es:GetOtherSlot(slot)
+    local p = {
+        [12] = 13,
+        [13] = 12,
+        [14] = 15,
+        [15] = 14,
+        [17] = 18,
+        [18] = 17,
+    }
+
+    return p[slot]
 end
 
 function es:EquipItemByName(name, slot)
@@ -466,7 +484,13 @@ function es:EquipSet(setId)
             if x == 1 or self:GetEquippedName(x) ~= name then
                 local result = self:SearchItems(name)
                 if #result == 0 then
-                    self:LogError("Item " .. self:Colorize(Colors.YELLOW, name) .. ' for slot ' .. self.SlotInfo[x].name .. ' not found.')
+                    if self:IsDoubleSlot(x) and self:GetEquippedName(self:GetOtherSlot(x)) then
+                        PickupInventoryItem(self:GetOtherSlot(x) - 1)
+                        PickupInventoryItem(x - 1)
+                    else
+                        self:LogError("Item " ..
+                            self:Colorize(Colors.YELLOW, name) .. ' for slot ' .. self.SlotInfo[x].name .. ' not found.')
+                    end
                 end
 
                 -- self:Log("Equipping " .. name .. ' to ' .. x)
@@ -596,7 +620,8 @@ local commands = {
             end
 
             es:Log("Saving current equpment to set №" ..
-                setId .. " " .. es:Colorize(Colors.YELLOW, #name > 0 and name or es:GetName(setId) or es:DefaultName(setId)))
+                setId ..
+                " " .. es:Colorize(Colors.YELLOW, #name > 0 and name or es:GetName(setId) or es:DefaultName(setId)))
             es:SaveCurrentSet(setId)
             if #name > 0 then
                 es:SetName(setId, name)
@@ -663,7 +688,7 @@ local commands = {
     list = {
         handler = function(args)
             local cnt = 0
-            es:Each(function (i)
+            es:Each(function(i)
                 cnt = cnt + 1
                 local totalItems = 0
                 local hasItems = 0
@@ -682,7 +707,8 @@ local commands = {
                     end
                 end
 
-                es:Log("№" .. i .. ' ' .. es:GetName(i, Colors.YELLOW) .. ' (' .. equippedItems .. '/' .. hasItems .. '/' .. totalItems .. ')')
+                es:Log("№" .. i .. ' ' ..
+                    es:GetName(i, Colors.YELLOW) .. ' (' .. equippedItems .. '/' .. hasItems .. '/' .. totalItems .. ')')
             end)
             es:Log("Total sets stored: " .. es:Colorize(Colors.YELLOW, cnt) .. ", legend: equipped/available/total")
         end
@@ -713,17 +739,20 @@ local commands = {
             table.removemulti(args, 1, 2)
             local positionName = table.concat(args, " ") or ""
             if #positionName > 0 then
-                es:Log('Saving position ' .. positionId .. ' "' .. positionName .. '" to set №' .. setId .. ' ' .. es:GetName(setId, Colors.YELLOW))
+                es:Log('Saving position ' ..
+                    positionId ..
+                    ' "' .. positionName .. '" to set №' .. setId .. ' ' .. es:GetName(setId, Colors.YELLOW))
                 es:SaveItem(setId, positionId, positionName)
             else
-                es:Log('Removing position ' .. positionId .. ' from set №' .. setId .. ' ' .. es:GetName(setId, Colors.YELLOW))
+                es:Log('Removing position ' ..
+                    positionId .. ' from set №' .. setId .. ' ' .. es:GetName(setId, Colors.YELLOW))
                 es:SaveItem(setId, positionId, nil)
             end
         end
     },
     reset = {
         handler = function(args)
-            es:ShowConfirmation("Wipe " .. es:Colorize(Colors.RED, 'ALL') .. ' stored equipments sets?', function ()
+            es:ShowConfirmation("Wipe " .. es:Colorize(Colors.RED, 'ALL') .. ' stored equipments sets?', function()
                 SavedSets = {}
             end)
         end
@@ -856,7 +885,7 @@ function es:Initialize1()
     fSettings.nameInput:SetAutoFocus(false)
     fSettings.nameInput:SetText("")
 
-    function fSettings:SetAction(action, setId, setName) 
+    function fSettings:SetAction(action, setId, setName)
         self.action = action
         self.setId = setId
         self.nameInput:SetText(setName)
@@ -897,7 +926,7 @@ function es:Initialize1()
     UIDropDownMenu_Initialize(setListDropdown, function(self, level, menuList)
         local info = UIDropDownMenu_CreateInfo()
 
-        es:Each(function (xx)
+        es:Each(function(xx)
             if (level or 1) == 1 then
                 info.func = function(self, arg)
                     if es:HasSet(arg) then
@@ -1013,7 +1042,8 @@ function es:Initialize1()
 
             info.text, info.arg2 = "Save", 'save'
             info.tooltipTitle = "Save set"
-            info.tooltipText = "Overwrite equipment set " .. es:GetName(menuList, Colors.YELLOW) .. " with currently equipped items."
+            info.tooltipText = "Overwrite equipment set " ..
+                es:GetName(menuList, Colors.YELLOW) .. " with currently equipped items."
             UIDropDownMenu_AddButton(info, level)
 
             -- local info = UIDropDownMenu_CreateInfo()
@@ -1058,7 +1088,7 @@ function es.OnItem(tip)
     if name ~= '' then
         if not tip._hasSets then
             local sets = {}
-            es:Each(function (i)
+            es:Each(function(i)
                 if es:HasItem(i, name) then
                     table.insert(sets, es:GetName(i))
                 end

@@ -17,7 +17,9 @@ local Colors = {
     GREEN = GREEN_FONT_COLOR,
     RED = RED_FONT_COLOR,
     YELLOW = YELLOW_FONT_COLOR,
-    LIGHT_YELLOW = LIGHTYELLOW_FONT_COLOR
+    LIGHT_YELLOW = LIGHTYELLOW_FONT_COLOR,
+    GRAY = GRAY_FONT_COLOR,
+    ORANGE = ORANGE_FONT_COLOR,
 }
 
 if not table.removemulti then
@@ -228,7 +230,10 @@ function es:UneqipSlots(slots)
 
     if spaceError then
         self:LogError("Not enough free space in bags, not all items were unequipped.")
+        return false
     end
+
+    return true
 end
 
 function es:ResetSet(setId, name)
@@ -489,7 +494,7 @@ function es:EquipSet(setId)
                         PickupInventoryItem(x - 1)
                     else
                         self:LogError("Item " ..
-                            self:Colorize(Colors.YELLOW, name) .. ' for slot ' .. self.SlotInfo[x].name .. ' not found.')
+                            self:Colorize(Colors.YELLOW, name) .. ' for ' .. self:Colorize(Colors.ORANGE, self.SlotInfo[x].name) .. ' slot not found.')
                     end
                 end
 
@@ -559,7 +564,7 @@ local commands = {
                 if setName ~= '' then
                     setId = es:GetSetByName(setName)
                     if not setId then
-                        es:LogError("Set " .. es:Colorize(Colors.YELLOW, setName) .. ' not found')
+                        es:LogError("Set " .. es:Colorize(Colors.ORANGE, setName) .. ' not found')
                         return
                     end
                 end
@@ -574,7 +579,7 @@ local commands = {
                 es:LogError("Set id " .. setId .. " is not stored")
                 return
             end
-            es:Log("Equipping set №" .. setId .. " " .. es:GetName(setId, Colors.YELLOW))
+            es:Log("Equipping set №" .. setId .. " " .. es:GetName(setId, Colors.ORANGE))
             es:EquipSet(setId)
         end,
     },
@@ -619,9 +624,9 @@ local commands = {
                 return
             end
 
-            es:Log("Saving current equpment to set №" ..
+            es:Log("Saved current equpment to set №" ..
                 setId ..
-                " " .. es:Colorize(Colors.YELLOW, #name > 0 and name or es:GetName(setId) or es:DefaultName(setId)))
+                " " .. es:Colorize(Colors.ORANGE, #name > 0 and name or es:GetName(setId) or es:DefaultName(setId)))
             es:SaveCurrentSet(setId)
             if #name > 0 then
                 es:SetName(setId, name)
@@ -630,8 +635,9 @@ local commands = {
     },
     unequip = {
         handler = function(args)
-            es:Log("Unequipping all items")
-            es:UnequipEverything()
+            if es:UnequipEverything() then
+                es:Log("Unequipped all items")
+            end
         end
     },
     rename = {
@@ -665,7 +671,7 @@ local commands = {
                 if setName ~= '' then
                     setId = es:GetSetByName(setName)
                     if not setId then
-                        es:LogError("Set " .. es:Colorize(Colors.YELLOW, setName) .. ' not found')
+                        es:LogError("Set " .. es:Colorize(Colors.ORANGE, setName) .. ' not found')
                         return
                     end
                 end
@@ -681,7 +687,7 @@ local commands = {
                 return
             end
 
-            es:Log("Removing equipment set №" .. setId .. " " .. es:GetName(setId, Colors.YELLOW))
+            es:Log("Removed equipment set №" .. setId .. " " .. es:GetName(setId, Colors.ORANGE))
             es:RemoveSet(setId)
         end
     },
@@ -708,9 +714,9 @@ local commands = {
                 end
 
                 es:Log("№" .. i .. ' ' ..
-                    es:GetName(i, Colors.YELLOW) .. ' (' .. equippedItems .. '/' .. hasItems .. '/' .. totalItems .. ')')
+                    es:GetName(i, Colors.ORANGE) .. ' (' .. equippedItems .. '/' .. hasItems .. '/' .. totalItems .. ')')
             end)
-            es:Log("Total sets stored: " .. es:Colorize(Colors.YELLOW, cnt) .. ", legend: equipped/available/total")
+            es:Log("Total sets stored: " .. es:Colorize(Colors.ORANGE, cnt) .. ", legend: equipped/available/total")
         end
     },
     setposition = {
@@ -739,13 +745,13 @@ local commands = {
             table.removemulti(args, 1, 2)
             local positionName = table.concat(args, " ") or ""
             if #positionName > 0 then
-                es:Log('Saving position ' ..
+                es:Log('Saved position ' ..
                     positionId ..
-                    ' "' .. positionName .. '" to set №' .. setId .. ' ' .. es:GetName(setId, Colors.YELLOW))
+                    ' "' .. positionName .. '" to set №' .. setId .. ' ' .. es:GetName(setId, Colors.ORANGE))
                 es:SaveItem(setId, positionId, positionName)
             else
-                es:Log('Removing position ' ..
-                    positionId .. ' from set №' .. setId .. ' ' .. es:GetName(setId, Colors.YELLOW))
+                es:Log('Removed position ' ..
+                    positionId .. ' from set №' .. setId .. ' ' .. es:GetName(setId, Colors.ORANGE))
                 es:SaveItem(setId, positionId, nil)
             end
         end
@@ -855,12 +861,14 @@ function es:UnequipEverything()
     for x = 1, MAX_SLOT_NUMBER do
         table.insert(slots, x)
     end
-    self:UneqipSlots(slots)
+    return self:UneqipSlots(slots)
 end
 
 SLASH_UNEQUIPALL1 = "/unequipall"
 SlashCmdList["UNEQUIPALL"] = function(msg)
-    es:UnequipEverything()
+    if es:UnequipEverything() then
+        es:Log("Unequipped all items")
+    end
 end
 
 function es:Initialize1()
@@ -930,7 +938,7 @@ function es:Initialize1()
             if (level or 1) == 1 then
                 info.func = function(self, arg)
                     if es:HasSet(arg) then
-                        es:Log("Loading set №" .. arg .. " " .. es:GetName(arg, Colors.YELLOW))
+                        es:Log("Equipped set №" .. arg .. " " .. es:GetName(arg, Colors.ORANGE))
                     end
                     es:EquipSet(arg)
                     CloseDropDownMenus()
@@ -948,16 +956,23 @@ function es:Initialize1()
                 for i = 1, MAX_SLOT_NUMBER do
                     local item = es:GetPositionName(xx, i)
                     if item then
+                        local equipped = es:GetEquippedName(i)
                         totalCnt = totalCnt + 1
                         local text = es.SlotInfo[i].name .. ':\n'
-                        if es:GetEquippedName(i) == item then
+                        if equipped == item then
                             equippedCnt = equippedCnt + 1
                             text = text .. es:Colorize(Colors.GREEN, item)
                         elseif #es:SearchItems(item) > 0 then
                             text = text .. es:Colorize(Colors.YELLOW, item)
+                            if equipped ~= nil then
+                                text = text .. '\n' .. es:Colorize(Colors.GRAY, equipped)
+                            end
                         else
                             hasMissing = true
                             text = text .. es:Colorize(Colors.RED, item)
+                            if equipped ~= nil then
+                                text = text .. '\n' .. es:Colorize(Colors.GRAY, equipped)
+                            end
                         end
                         table.insert(tooltipTexts, text)
                     end
@@ -995,8 +1010,9 @@ function es:Initialize1()
 
             -- local info = UIDropDownMenu_CreateInfo()
             info.func = function()
-                es:Log("Unequipping everything")
-                es:UnequipEverything()
+                if es:UnequipEverything() then
+                    es:Log("Unequipped all items")
+                end
                 CloseDropDownMenus()
             end
 
@@ -1011,7 +1027,7 @@ function es:Initialize1()
             info.func = function(self, arg1, arg2)
                 local text, OnAccept
                 if arg2 == 'save' then
-                    text = "Overwrite equipment set " .. es:GetName(arg1, Colors.YELLOW) .. " ?"
+                    text = "Overwrite equipment set " .. es:GetName(arg1, Colors.ORANGE) .. " ?"
                     OnAccept = function()
                         es:SaveCurrentSet(arg1)
                     end
@@ -1021,7 +1037,7 @@ function es:Initialize1()
                     CloseDropDownMenus()
                     return
                 elseif arg2 == 'delete' then
-                    text = "Delete equipment set " .. es:GetName(arg1, Colors.RED) .. " ?"
+                    text = self:Colorize("Delete", Colors.RED) .. " equipment set " .. es:GetName(arg1, Colors.ORANGE) .. " ?"
                     OnAccept = function()
                         es:RemoveSet(arg1)
                     end
@@ -1043,19 +1059,19 @@ function es:Initialize1()
             info.text, info.arg2 = "Save", 'save'
             info.tooltipTitle = "Save set"
             info.tooltipText = "Overwrite equipment set " ..
-                es:GetName(menuList, Colors.YELLOW) .. " with currently equipped items."
+                es:GetName(menuList, Colors.ORANGE) .. " with currently equipped items."
             UIDropDownMenu_AddButton(info, level)
 
             -- local info = UIDropDownMenu_CreateInfo()
             info.text, info.arg2 = "Rename", 'rename'
             info.tooltipTitle = "Rename set"
-            info.tooltipText = "Rename equipment set " .. es:GetName(menuList, Colors.YELLOW)
+            info.tooltipText = "Rename equipment set " .. es:GetName(menuList, Colors.ORANGE)
             UIDropDownMenu_AddButton(info, level)
 
             -- local info = UIDropDownMenu_CreateInfo()
             info.text, info.arg2 = "Delete", 'delete'
             info.tooltipTitle = "Delete set"
-            info.tooltipText = "Delete equipment set " .. es:GetName(menuList, Colors.YELLOW)
+            info.tooltipText = "Delete equipment set " .. es:GetName(menuList, Colors.ORANGE)
             UIDropDownMenu_AddButton(info, level)
         end
     end)
